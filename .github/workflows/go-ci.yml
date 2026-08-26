@@ -166,10 +166,6 @@ jobs:
             echo "::endgroup::"
           done
 
-      # 失敗したときだけ再現用シードを引き上げる。CI で見つけたクラッシュ入力は
-      # testdata/fuzz/ に書き出されるので、これをコミットすれば回帰テストになる。
-      # 取り損ねるとログしか残らず、同じ入力を作り直せない。
-      # パスを glob にしてあるのは、対象パッケージが呼ぶ側ごとに違うため。
       - name: Upload fuzz failures
         if: failure()
         uses: actions/upload-artifact@v7
