@@ -165,3 +165,12 @@ jobs:
             go test "$pkg" -run '^$' -fuzz "^${fn}$" -fuzztime "$FUZZTIME"
             echo "::endgroup::"
           done
+
+      - name: Upload fuzz failures
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-corpus
+          path: "**/testdata/fuzz/"
+          retention-days: 7
+          if-no-files-found: ignore
