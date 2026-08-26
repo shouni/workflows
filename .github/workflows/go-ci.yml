@@ -1,0 +1,167 @@
+name: Go CI
+
+on:
+  workflow_call:
+    inputs:
+      timeout-minutes:
+        description: 各ジョブの制限時間（分）
+        type: number
+        default: 15
+      golangci-lint-version:
+        description: CI で使う golangci-lint の版
+        type: string
+        default: v2.13.1
+      coverage:
+        description: カバレッジを測り、ステップサマリに出す
+        type: boolean
+        default: false
+      upload-coverage:
+        description: coverage.out を artifact に上げる。coverage が true のときだけ意味を持つ
+        type: boolean
+        default: false
+      apt-packages:
+        description: テスト前に入れる apt パッケージ（空白区切り）
+        type: string
+        default: ''
+      fuzz-targets:
+        description: '"パッケージ#関数名" の空白区切り。空なら fuzz ジョブごと走らない'
+        type: string
+        default: ''
+      fuzz-time:
+        description: 1 ターゲットあたりの fuzz 時間
+        type: string
+        default: 20s
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Install apt packages
+        if: inputs.apt-packages != ''
+        timeout-minutes: 6
+        env:
+          PACKAGES: ${{ inputs.apt-packages }}
+        run: |
+          for attempt in 1 2 3; do
+            if timeout 120 sudo apt-get update \
+              && timeout 180 sudo apt-get install -y --no-install-recommends $PACKAGES; then
+              exit 0
+            fi
+            echo "::warning::apt failed or stalled (attempt ${attempt}/3); retrying" >&2
+            sleep 10
+          done
+          echo "::error::could not install apt packages: $PACKAGES" >&2
+          exit 1
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Gofmt check
+        run: test -z "$(gofmt -l .)"
+
+      - name: Test
+        if: ${{ !inputs.coverage }}
+        run: go test -shuffle=on -race ./...
+
+      - name: Test (with coverage)
+        if: inputs.coverage
+        run: go test -shuffle=on -race -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Coverage summary
+        if: inputs.coverage
+        run: |
+          go tool cover -func=coverage.out | tee coverage.txt
+          {
+            echo "### Coverage"
+            echo '```'
+            tail -n 1 coverage.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage artifact
+        if: inputs.coverage && inputs.upload-coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage
+          path: coverage.out
+          retention-days: 7
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: ${{ inputs.golangci-lint-version }}
+
+  vulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Run govulncheck
+        run: govulncheck ./...
+
+  fuzz:
+    name: Fuzz (smoke)
+    if: inputs.fuzz-targets != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Fuzz
+        env:
+          TARGETS: ${{ inputs.fuzz-targets }}
+          FUZZTIME: ${{ inputs.fuzz-time }}
+        run: |
+          for spec in $TARGETS; do
+            pkg="${spec%%#*}"
+            fn="${spec##*#}"
+            echo "::group::${pkg} ${fn}"
+            go test "$pkg" -run '^$' -fuzz "^${fn}$" -fuzztime "$FUZZTIME"
+            echo "::endgroup::"
+          done

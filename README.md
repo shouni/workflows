@@ -48,7 +48,7 @@ permissions:
 
 jobs:
   ci:
-    uses: shouni/workflows/.github/workflows/go-ci.yml@v1
+    uses: shouni/workflows/.github/workflows/go-ci.yml@v1.0.0
 ```
 
 `on` / `concurrency` / `permissions` は呼ぶ側に残る。`workflow_call` を宣言できるのは、呼ばれる側だけなので、トリガーの定義は共有できない。
@@ -62,7 +62,7 @@ jobs:
 | `timeout-minutes` | number | `15` | 各ジョブの制限時間 |
 | `golangci-lint-version` | string | `v2.13.1` | CI で使う golangci-lint の版 |
 | `coverage` | boolean | `false` | カバレッジを測り、ステップサマリに出す |
-| `upload-coverage` | boolean | `false` | `coverage.out` を artifact に上げる（7 日保持） |
+| `upload-coverage` | boolean | `false` | `coverage.out` を artifact に上げる（7 日保持）。`coverage: true` が前提 |
 | `apt-packages` | string | `''` | テスト前に入れる apt パッケージ（空白区切り） |
 | `fuzz-targets` | string | `''` | `パッケージ#関数名` の空白区切り。空なら fuzz ジョブごと動かない |
 | `fuzz-time` | string | `20s` | 1 ターゲットあたりの fuzz 時間 |
@@ -142,9 +142,14 @@ jobs:
 
 ### タグで固定する
 
-呼ぶ側は `@v1` のようにタグで固定し、Dependabot の `github-actions` エコシステムが
-`uses:` の ref を追う。**上げるのはリポジトリごとに 1 本ずつの PR**になるので、
-共有ワークフローが壊れたときに 25 本が同時に落ちることを避けられる。
+呼ぶ側は `@v1.0.0` のように**不変のタグ**で固定する。Dependabot の `github-actions`
+エコシステムが `uses:` の ref を追うので、新しい版を切ると**リポジトリごとに 1 本ずつ
+PR が立つ**。共有ワークフローが壊れたときに 25 本が同時に落ちることを、これで避けられる。
+
+**移動するタグ（`@v1` を毎リリース張り替える形）は使わない。** GitHub Actions ではよくある
+流儀だが、ref の文字列が変わらないので Dependabot に上げるものが無く、全消費側が次の実行で
+いきなり新しい内容を引く。**段階的な展開という目的と正面からぶつかる。**
+
 新しい golangci-lint を 1 本だけで試したい場合は `golangci-lint-version` を上書きする。
 
 ---
