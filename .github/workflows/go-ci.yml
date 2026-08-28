@@ -51,13 +51,15 @@ jobs:
 
       - name: Install apt packages
         if: inputs.apt-packages != ''
-        timeout-minutes: 6
+        # 3 回ぶんの時間予算を確保する。1 回は 60 + 120 + sleep 10 = 190 秒で、3 回で 570 秒。
+        # ステップを 6 分にすると 1 回と少ししか入らず、書いてあるリトライが実際には回らない。
+        timeout-minutes: 10
         env:
           PACKAGES: ${{ inputs.apt-packages }}
         run: |
           for attempt in 1 2 3; do
-            if timeout 120 sudo apt-get update \
-              && timeout 180 sudo apt-get install -y --no-install-recommends $PACKAGES; then
+            if timeout 60 sudo apt-get update \
+              && timeout 120 sudo apt-get install -y --no-install-recommends $PACKAGES; then
               exit 0
             fi
             echo "::warning::apt failed or stalled (attempt ${attempt}/3); retrying" >&2
@@ -158,11 +160,20 @@ jobs:
           TARGETS: ${{ inputs.fuzz-targets }}
           FUZZTIME: ${{ inputs.fuzz-time }}
         run: |
+          # tee でログに残すため、go test の失敗を tee の成功で隠さないようにする。
+          set -o pipefail
+          log="$(mktemp)"
           for spec in $TARGETS; do
             pkg="${spec%%#*}"
             fn="${spec##*#}"
             echo "::group::${pkg} ${fn}"
-            go test "$pkg" -run '^$' -fuzz "^${fn}$" -fuzztime "$FUZZTIME"
+            go test "$pkg" -run '^$' -fuzz "^${fn}$" -fuzztime "$FUZZTIME" 2>&1 | tee "$log"
+            # -fuzz が 0 個に一致しても go test は警告を出して exit 0 で返る。終了コードだけを
+            # 見ていると、改名・綴り違い・パッケージ移動が「緑の空回り」になる。
+            if grep -q 'no fuzz tests to fuzz' "$log"; then
+              echo "::error::${pkg} に ${fn} が無い（改名か綴り違い）。fuzz-targets を直すこと。" >&2
+              exit 1
+            fi
             echo "::endgroup::"
           done
 
