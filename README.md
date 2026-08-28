@@ -87,6 +87,10 @@ jobs:
 （`**/testdata/fuzz/`、7 日保持）。CI で見つけたクラッシュ入力はここにしか残らないので、
 回帰テストにするならこれを取ってコミットする。成功時は生成されない。
 
+**`fuzz-targets` が実態とズレると、ジョブは緑のまま何も探索しない。** `go test -fuzz` は
+一致するターゲットが 0 個でも `no fuzz tests to fuzz` と警告して exit 0 を返すため、
+出力を捕まえて落としている（下の「設計の判断」）。
+
 ---
 
 ## 🗂 リポジトリごとの設定 (Per-repository settings)
@@ -95,7 +99,7 @@ jobs:
 
 | リポジトリ | 設定 |
 |---|---|
-| `gcp-kit` | `fuzz-targets: "./auth#FuzzBuildLoginRedirectURL ./auth#FuzzIsSafeRelativePath ./auth#FuzzExtractBearerToken"` |
+| `gcp-kit` | `fuzz-targets: "./auth/session#FuzzBuildLoginRedirectURL ./auth/session#FuzzIsSafeRelativePath ./auth/oidc#FuzzExtractBearerToken"` |
 | `audio` | `fuzz-targets: "./wav#FuzzExtractAudioData ./wav#FuzzCombineToMatchesCombineWavData ./wav#FuzzCombineToDoesNotPanic"` |
 | `netarmor` | `coverage: true` / `upload-coverage: true` / `fuzz-targets: "./securenet#FuzzValidateURL ./securenet#FuzzIsSecureServiceURL"` / `fuzz-time: 60s` |
 | `gemini-image-kit` | `coverage: true` / `fuzz-targets: "./internal/imgutil#FuzzDetectMIMEType ./internal/imgutil#FuzzCompressToJPEG"` / `fuzz-time: 60s` |
@@ -134,12 +138,30 @@ jobs:
 シェル変数として参照する。呼ぶ側は自分の管理下だが、テンプレート展開がシェルの構文解析より
 先に起きる形を残さない。
 
+### fuzz は「探索しなかった」ことを失敗として扱う
+
+`go test -run '^$' -fuzz '^Name$'` は、`Name` が存在しなくても **exit 0 で返る**
+（`testing: warning: no fuzz tests to fuzz` を出して PASS）。終了コードだけを見ていると、
+関数の改名・綴り違い・パッケージの移動が、そのまま「緑の fuzz ジョブ」になる。
+
+**fuzz が唯一の防波堤になっている入力経路がある**ので（`netarmor` の URL 検証、`gcp-kit` の
+Bearer トークン、`gemini-image-kit` の画像バイナリ判定）、黙って止まる形は残さない。出力に
+その警告が出たらステップを落とす。
+
+実例として `gcp-kit` は `./auth` から `./auth/session` と `./auth/oidc` へ分割されており、
+`fuzz-targets` の追随が必要になったことが既にある。
+
 ### apt はリトライで包む
 
 ミラー側の不調は「失敗」ではなく「応答しない」形で出る。実測で `apt-get update` が
 14 分応答せず、ジョブ全体の制限時間をこのステップだけで使い切った（同一コミットの
 `pull_request` 側は 4 分半で完走しており、原因はコードではなくミラー）。
 **コマンド単位で `timeout` を掛けないと、ハングしたときにリトライへ進めない。**
+
+**リトライの回数は、ステップの制限時間と噛み合っていないと嘘になる。** 1 回あたり
+`timeout 60`（update）+ `timeout 120`（install）+ `sleep 10` = 190 秒で、3 回ぶんは 570 秒。
+ステップは 10 分にしてある。以前はコマンド側が 120/180 秒でステップが 6 分だったため、
+**2 回目の途中で打ち切られて 3 回は回っていなかった。**
 
 ### `.golangci.yml` は共有しない
 
