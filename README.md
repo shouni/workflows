@@ -277,13 +277,22 @@ GitHub 側の仕様で、設定では変えられない。**main と develop が
 
 | リポジトリの種類 | 宣言するもの |
 |---|---|
-| Go のライブラリ / アプリ | `gomod` + `github-actions` |
+| Go のライブラリ | `gomod` + `github-actions` |
+| Go のアプリ（`Dockerfile` を持つ） | `gomod` + **`docker`** + `github-actions` |
 | Terraform | `terraform` + `github-actions` |
 | **このリポジトリ**（Go のコード無し） | `github-actions` のみ |
 
 Go のコードが無いのに `gomod` を宣言すると、依存ゼロの走査が毎日回るだけになる。
 **このリポジトリの `dependabot.yml` は標準形ではなくこの例外**なので、見本にするなら
 Go のリポジトリのものを見ること。
+
+`docker` が要るのは `Dockerfile` を持つリポジトリだけで、判定は「ビルドが CI にあるか」
+ではない。**イメージのビルドは Cloud Build 側なので GitHub Actions には一切現れないが、
+それは追跡しなくていい理由にはならない。** `mwader/static-ffmpeg:7.1` のように版を固定した
+ベースイメージは、誰も上げなければ永久にその版のままになる。`golang:1.27-alpine` のような
+浮動タグは再ビルドでパッチを拾えるが、`1.27` から先へは自分では動かない。
+
+`FROM scratch` は Dependabot の対象外なので、書いても書かなくても結果は変わらない。
 
 ---
 
