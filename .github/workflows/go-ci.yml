@@ -57,9 +57,12 @@ jobs:
         env:
           PACKAGES: ${{ inputs.apt-packages }}
         run: |
+          # 空白区切りを配列に開く。$PACKAGES を裸で渡しても同じに動くが、それだと
+          # 語分割が「意図」ではなく「たまたま」に見え、shellcheck も SC2086 で止まる。
+          read -ra PKGS <<< "$PACKAGES"
           for attempt in 1 2 3; do
             if timeout 60 sudo apt-get update \
-              && timeout 120 sudo apt-get install -y --no-install-recommends $PACKAGES; then
+              && timeout 120 sudo apt-get install -y --no-install-recommends "${PKGS[@]}"; then
               exit 0
             fi
             echo "::warning::apt failed or stalled (attempt ${attempt}/3); retrying" >&2
