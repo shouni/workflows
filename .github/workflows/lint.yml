@@ -1,0 +1,54 @@
+# go-ci.yml は 24 リポジトリが移動タグ `@v1` 越しに参照している。壊れた内容を張り替えれば
+# 全部が同時に落ちるが、README の「変更を反映する手順」に書いたガードは手順であって仕組みでは
+# ない。**機械で拾える分は、タグを動かすより前にここで拾う。**
+#
+# actionlint が見るのは構文だけではない。式（`${{ }}`）の参照先、`uses:` の書式、そして
+# **`run:` の中身**まで検査する。ランナーには shellcheck が入っているので、actionlint は
+# それを見つけてシェルスクリプトとして解析する。
+#
+# 手元で `actionlint` を直接動かすときは注意。**shellcheck が入っていない環境では
+# `run:` の検査が丸ごと省略され、緑に見えて CI で落ちる。** 実際にこのワークフローを
+# 入れたとき、go-ci.yml の apt ステップが SC2086 で引っかかった（今は解消済み）。
+#
+# `paths:` フィルタは付けない。このチェックは main の必須ステータスチェックにしてあり、
+# skip されたチェックは「成功」ではなく「未報告」になるため、ワークフローを触らない PR が
+# 永久にマージできなくなる。全 PR で走らせるのが条件。
+
+name: Lint workflows
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      # このリポジトリは Go のコードを持たないので go.mod が無い。go-version を明示する。
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          check-latest: true
+
+      # go-ci.yml が govulncheck をアクション経由で入れないのと同じ理由で、版を自分で
+      # 決められる go install にする。ただしあちらの `@latest` と違って**固定する**。
+      # 脆弱性スキャナは新しいほど良いが、リンタは新しい版が出た瞬間に赤くなるのが困る
+      # （go-ci.yml が golangci-lint の版をピンしているのと同じ考え方）。
+      - name: Install actionlint
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+
+      - name: actionlint
+        run: actionlint -color
