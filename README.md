@@ -67,7 +67,7 @@ jobs:
 | 入力 | 型 | 既定値 | 意味 |
 |---|---|---|---|
 | `timeout-minutes` | number | `15` | 各ジョブの制限時間 |
-| `golangci-lint-version` | string | `v2.13.1` | golangci-lint の版 |
+| `golangci-lint-version` | string | `v2.14.0` | golangci-lint の版 |
 | `coverage` | boolean | `false` | カバレッジを測り、ステップサマリに出す |
 | `upload-coverage` | boolean | `false` | `coverage.out` を artifact に上げる（7 日保持）。`coverage: true` が前提 |
 | `apt-packages` | string | `''` | テスト前に入れる apt パッケージ（空白区切り） |
@@ -177,6 +177,12 @@ shellcheck が無い環境では `run:` の検査が丸ごと省略される。*
 版は `@latest` ではなく固定する。govulncheck は新しいほど良いが、リンタは新しい版が出た
 瞬間に赤くなるのが困る（`golangci-lint-version` をピンしているのと同じ理由）。
 
+**ピンしたリンタは Go の側から壊れることがある。** Go は `check-latest: true` で最新の
+パッチ版に上がるが、golangci-lint は固定のまま。Go 1.27.2 で標準ライブラリの export data が
+version 5 になり、v2.13.1（version 4 まで）は全リポジトリの Lint で `could not load export
+data` の typecheck エラーを出した。この形のエラーはコードではなく版の不一致なので、
+golangci-lint を上げる。
+
 ### `.golangci.yml` は共有しない
 
 **版のピンだけを共有し、設定そのものは各リポジトリに残す。** 24 本中 17 本が一致するが、
@@ -277,13 +283,22 @@ GitHub 側の仕様で、設定では変えられない。**main と develop が
 
 | リポジトリの種類 | 宣言するもの |
 |---|---|
-| Go のライブラリ / アプリ | `gomod` + `github-actions` |
+| Go のライブラリ | `gomod` + `github-actions` |
+| Go のアプリ（`Dockerfile` を持つ） | `gomod` + **`docker`** + `github-actions` |
 | Terraform | `terraform` + `github-actions` |
 | **このリポジトリ**（Go のコード無し） | `github-actions` のみ |
 
 Go のコードが無いのに `gomod` を宣言すると、依存ゼロの走査が毎日回るだけになる。
 **このリポジトリの `dependabot.yml` は標準形ではなくこの例外**なので、見本にするなら
 Go のリポジトリのものを見ること。
+
+`docker` が要るのは `Dockerfile` を持つリポジトリだけで、判定は「ビルドが CI にあるか」
+ではない。**イメージのビルドは Cloud Build 側なので GitHub Actions には一切現れないが、
+それは追跡しなくていい理由にはならない。** `mwader/static-ffmpeg:7.1` のように版を固定した
+ベースイメージは、誰も上げなければ永久にその版のままになる。`golang:1.27-alpine` のような
+浮動タグは再ビルドでパッチを拾えるが、`1.27` から先へは自分では動かない。
+
+`FROM scratch` は Dependabot の対象外なので、書いても書かなくても結果は変わらない。
 
 ---
 
