@@ -177,6 +177,12 @@ shellcheck が無い環境では `run:` の検査が丸ごと省略される。*
 版は `@latest` ではなく固定する。govulncheck は新しいほど良いが、リンタは新しい版が出た
 瞬間に赤くなるのが困る（`golangci-lint-version` をピンしているのと同じ理由）。
 
+**ピンしたリンタは Go の側から壊れることがある。** Go は `check-latest: true` で最新の
+パッチ版に上がるが、golangci-lint は固定のまま。Go 1.27.2 で標準ライブラリの export data が
+version 5 になり、v2.13.1（version 4 まで）は全リポジトリの Lint で `could not load export
+data` の typecheck エラーを出した。この形のエラーはコードではなく版の不一致なので、
+golangci-lint を上げる。
+
 ### `.golangci.yml` は共有しない
 
 **版のピンだけを共有し、設定そのものは各リポジトリに残す。** 24 本中 17 本が一致するが、
