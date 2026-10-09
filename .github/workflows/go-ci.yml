@@ -10,7 +10,7 @@ on:
       golangci-lint-version:
         description: CI で使う golangci-lint の版
         type: string
-        default: v2.13.1
+        default: v2.14.0
       coverage:
         description: カバレッジを測り、ステップサマリに出す
         type: boolean

@@ -67,7 +67,7 @@ jobs:
 | 入力 | 型 | 既定値 | 意味 |
 |---|---|---|---|
 | `timeout-minutes` | number | `15` | 各ジョブの制限時間 |
-| `golangci-lint-version` | string | `v2.13.1` | golangci-lint の版 |
+| `golangci-lint-version` | string | `v2.14.0` | golangci-lint の版 |
 | `coverage` | boolean | `false` | カバレッジを測り、ステップサマリに出す |
 | `upload-coverage` | boolean | `false` | `coverage.out` を artifact に上げる（7 日保持）。`coverage: true` が前提 |
 | `apt-packages` | string | `''` | テスト前に入れる apt パッケージ（空白区切り） |
