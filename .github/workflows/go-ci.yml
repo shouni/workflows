@@ -51,14 +51,13 @@ jobs:
 
       - name: Install apt packages
         if: inputs.apt-packages != ''
-        # 3 回ぶんの時間予算を確保する。1 回は 60 + 120 + sleep 10 = 190 秒で、3 回で 570 秒。
-        # ステップを 6 分にすると 1 回と少ししか入らず、書いてあるリトライが実際には回らない。
+        # 3 回ぶんを収める。1 回は timeout 60 + timeout 120 + sleep 10 = 190 秒で、3 回で 570 秒。
+        # コマンド側の timeout を変えたら、ここも合わせて見直すこと。
         timeout-minutes: 10
         env:
           PACKAGES: ${{ inputs.apt-packages }}
         run: |
-          # 空白区切りを配列に開く。$PACKAGES を裸で渡しても同じに動くが、それだと
-          # 語分割が「意図」ではなく「たまたま」に見え、shellcheck も SC2086 で止まる。
+          # 空白区切りを明示的に配列へ開く。裸の $PACKAGES に頼る語分割は shellcheck の SC2086 になる。
           read -ra PKGS <<< "$PACKAGES"
           for attempt in 1 2 3; do
             if timeout 60 sudo apt-get update \
@@ -163,7 +162,7 @@ jobs:
           TARGETS: ${{ inputs.fuzz-targets }}
           FUZZTIME: ${{ inputs.fuzz-time }}
         run: |
-          # tee でログに残すため、go test の失敗を tee の成功で隠さないようにする。
+          # 既定のシェルは pipefail ではないので、go test の失敗が tee の成功に隠れないようにする。
           set -o pipefail
           log="$(mktemp)"
           for spec in $TARGETS; do
@@ -171,8 +170,8 @@ jobs:
             fn="${spec##*#}"
             echo "::group::${pkg} ${fn}"
             go test "$pkg" -run '^$' -fuzz "^${fn}$" -fuzztime "$FUZZTIME" 2>&1 | tee "$log"
-            # -fuzz が 0 個に一致しても go test は警告を出して exit 0 で返る。終了コードだけを
-            # 見ていると、改名・綴り違い・パッケージ移動が「緑の空回り」になる。
+            # -fuzz が 0 個に一致しても go test は警告を出して exit 0 で返る。終了コードだけでは
+            # 改名・綴り違い・パッケージ移動が「緑の空回り」になる（README「設計の判断」）。
             if grep -q 'no fuzz tests to fuzz' "$log"; then
               echo "::error::${pkg} に ${fn} が無い（改名か綴り違い）。fuzz-targets を直すこと。" >&2
               exit 1
