@@ -84,17 +84,22 @@ jobs:
 
 ## 🗂 リポジトリごとの設定 (Per-repository settings)
 
-`with:` が要るのは 6 本で、残り 18 本は呼ぶだけでよい。**下表は公開リポジトリのみ。**
+`with:` が要るのは 9 本で、残り 15 本は呼ぶだけでよい。**下表は公開リポジトリの 8 本のみ。**
 
 | リポジトリ | 設定 |
 |---|---|
-| `gcp-kit` | `fuzz-targets: "./auth/session#FuzzBuildLoginRedirectURL ./auth/session#FuzzIsSafeRelativePath ./auth/oidc#FuzzExtractBearerToken"` |
 | `audio` | `fuzz-targets: "./wav#FuzzExtractAudioData ./wav#FuzzCombineToMatchesCombineWavData ./wav#FuzzCombineToDoesNotPanic"` |
-| `netarmor` | `coverage: true` / `upload-coverage: true` / `fuzz-targets: "./securenet#FuzzValidateURL ./securenet#FuzzIsSecureServiceURL"` / `fuzz-time: 60s` |
-| `gemini-image-kit` | `coverage: true` / `fuzz-targets: "./internal/imgutil#FuzzDetectMIMEType ./internal/imgutil#FuzzCompressToJPEG"` / `fuzz-time: 60s` |
-| `go-gemini-client` | `coverage: true` / `fuzz-targets: "./gemini#FuzzCleanJSONResponse"` / `fuzz-time: 60s` |
+| `gcp-kit` | `fuzz-targets: "./auth/session#FuzzBuildLoginRedirectURL ./auth/session#FuzzIsSafeRelativePath ./auth/oidc#FuzzExtractBearerToken"` |
+| `genai-kit` | `coverage: true` / `fuzz-targets: ./gemini#FuzzCleanJSONResponse` / `fuzz-time: 60s` |
+| `go-notify` | `fuzz-targets: "./slack#FuzzFormatMarkdown ./slack#FuzzSplitSectionText"` / `fuzz-time: 60s` |
+| `go-review-kit` | `fuzz-targets: "./review#FuzzSanitizeJSON ./review#FuzzParseReport"` / `fuzz-time: 60s` |
+| `go-utils` | `fuzz-targets: "./jobid#FuzzSanitize ./jobid#FuzzCreatedAt"` / `fuzz-time: 60s` |
+| `go-web-reader` | `fuzz-targets: "./extract#FuzzText ./reader#FuzzResolveMediaType"` / `fuzz-time: 60s` |
+| `netarmor` | `coverage: true` / `upload-coverage: true` / `fuzz-targets: "./securenet#FuzzValidateURL ./securenet#FuzzIsSecureServiceURL ./securenet#FuzzZonedLiteral"` / `fuzz-time: 60s` |
 
-`fuzz-time` は 3 本が `60s`、`gcp-kit` と `audio` は既定の `20s`。**この差に理由の記録は
+各リポジトリの `ci.yml` には、その対象を fuzz する理由がコメントで書いてある。
+
+`fuzz-time` は 6 本が `60s`、`gcp-kit` と `audio` は既定の `20s`。**この差に理由の記録は
 無い**ので、値だけ据えて説明は付けていない。揃える判断をするなら、まず理由を決めること。
 
 ---
@@ -134,7 +139,7 @@ jobs:
 関数の改名・綴り違い・パッケージの移動が、そのまま「緑の fuzz ジョブ」になる。
 
 **fuzz が唯一の防波堤になっている入力経路がある**ので（`netarmor` の URL 検証、`gcp-kit` の
-Bearer トークン、`gemini-image-kit` の画像バイナリ判定）、黙って止まる形は残さない。出力に
+Bearer トークン、`go-utils` のジョブ ID 検証）、黙って止まる形は残さない。出力に
 その警告が出たらステップを落とす。
 
 実例として `gcp-kit` は `./auth` から `./auth/session` と `./auth/oidc` へ分割されており、
@@ -173,13 +178,13 @@ golangci-lint を上げる。
 
 ### `.golangci.yml` は共有しない
 
-**版のピンだけを共有し、設定そのものは各リポジトリに残す。** 24 本中 17 本が一致するが、
-残る 7 本の差は意図的なものを含む。たとえば `go-notify` は `exhaustive` を追加して
+**版のピンだけを共有し、設定そのものは各リポジトリに残す。** 24 本中 15 本が一致するが、
+残る 9 本（7 通り）の差は意図的なものを含む。たとえば `go-notify` は `exhaustive` を追加して
 `check: [switch, map]` にしてあり、理由が設定に書いてある——`notify.Level` を実際に
 扱い分けているのは `slack` の `levelColors` でこれはマップなので、種別を足したときに
 抜けても参照が空文字で素通りし、拾えないと無色の通知になる。
 
-**共通化するとこの知識の置き場所が消える。** 一致している 17 本も、一致していることが
+**共通化するとこの知識の置き場所が消える。** 一致している 15 本も、一致していることが
 検査されていないだけで、揃える理由が別にあるわけではない。
 
 新しい golangci-lint を 1 本だけで試したい場合は `golangci-lint-version` を上書きする。
