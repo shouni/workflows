@@ -1,7 +1,6 @@
-# このリポジトリ自身の CI。go-ci.yml を含むワークフローを actionlint に掛け、`v1` を
-# 動かす前に、機械で拾える誤り（式の参照先、`uses:` の書式、`run:` の中身）を PR の時点で拾う。
-# 理由と、手元で動かすときの落とし穴（shellcheck が無いと `run:` の検査が省略される）は
-# README の「自分のワークフローは actionlint に掛ける」にある。
+# このリポジトリ自身の CI。go-ci.yml を含むワークフローを actionlint に掛ける。
+# 理由・版を固定する理由・手元で動かすときの落とし穴は README「自分のワークフローは
+# actionlint に掛ける」にある。
 #
 # `paths:` フィルタは付けない。このチェックは main の必須ステータスチェックにしてあり、
 # skip されたチェックは「成功」ではなく「未報告」になるため、ワークフローを触らない PR が
@@ -30,15 +29,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # このリポジトリは Go のコードを持たないので go.mod が無い。go-version を明示する。
+      # このリポジトリは Go のコードを持たない。go.mod が無いので go-version を明示し、
+      # キャッシュも切る（既定の true のままだと go.mod を探して毎回 warning を出す）。
       - uses: actions/setup-go@v7
         with:
           go-version: stable
           check-latest: true
+          cache: false
 
-      # 版は固定する。govulncheck の `@latest` と違い、リンタは新しい版が出た瞬間に赤くなるのが
-      # 困る（golangci-lint の版をピンしているのと同じ理由。README「自分のワークフローは
-      # actionlint に掛ける」）。
       - name: Install actionlint
         run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 

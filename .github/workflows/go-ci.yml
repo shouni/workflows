@@ -47,7 +47,6 @@ jobs:
         with:
           go-version-file: go.mod
           check-latest: true
-          cache: true
 
       - name: Install apt packages
         if: inputs.apt-packages != ''
@@ -117,7 +116,6 @@ jobs:
         with:
           go-version-file: go.mod
           check-latest: true
-          cache: true
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
@@ -135,7 +133,6 @@ jobs:
         with:
           go-version-file: go.mod
           check-latest: true
-          cache: true
 
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
@@ -155,7 +152,6 @@ jobs:
         with:
           go-version-file: go.mod
           check-latest: true
-          cache: true
 
       - name: Fuzz
         env:
