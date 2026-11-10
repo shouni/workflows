@@ -174,9 +174,10 @@ shellcheck が無い環境では `run:` の検査が丸ごと省略される。*
 手作業になる（`go install` の版は Dependabot の対象外）。
 
 **ピンしたリンタは Go の側から壊れることがある。** Go は `check-latest: true` で最新の
-パッチ版に上がるが、golangci-lint は固定のまま。Go 1.27.2 で標準ライブラリの export data が
-version 5 になり、v2.13.1（version 4 まで）は全リポジトリの Lint で `could not load export
-data` の typecheck エラーを出した。この形のエラーはコードではなく版の不一致なので、
+パッチ版に上がるが、golangci-lint は固定のまま。2026 年 10 月、Go 1.27.2 で標準ライブラリの
+export data が version 5 になり、v2.13.1（version 4 まで）は全リポジトリの Lint で
+`could not load export data` の typecheck エラーを出した（既定を v2.14.0 に上げた）。
+この形のエラーはコードではなく版の不一致なので、
 golangci-lint を上げる。
 
 ### 外部アクションはコミット SHA で参照する

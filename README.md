@@ -183,10 +183,11 @@ linter turning red the moment a new version ships is a problem (the same reason
 Dependabot's scope).
 
 **A pinned linter can be broken from the Go side.** Go moves to the latest patch release with
-`check-latest: true`, but golangci-lint stays pinned. In Go 1.27.2 the standard library's
-export data moved to version 5, and v2.13.1 (which supports up to version 4) produced a
-`could not load export data` typecheck error in Lint for every repository. An error of this
-shape is a version mismatch, not the code, so bump golangci-lint.
+`check-latest: true`, but golangci-lint stays pinned. In October 2026, Go 1.27.2 moved the
+standard library's export data to version 5, and v2.13.1 (which supports up to version 4)
+produced a `could not load export data` typecheck error in Lint for every repository; the
+default went to v2.14.0. An error of this shape is a version mismatch, not the code, so bump
+golangci-lint.
 
 ### External actions are referenced by commit SHA
 
