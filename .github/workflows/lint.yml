@@ -1,10 +1,10 @@
-# このリポジトリ自身の CI。go-ci.yml を含むワークフローを actionlint に掛ける。
-# 理由・版を固定する理由・手元で動かすときの落とし穴は README「自分のワークフローは
-# actionlint に掛ける」にある。
+# This repository's own CI. Runs actionlint over the workflows, go-ci.yml included.
+# The reasons, why the version is pinned and the pitfall when running it locally are in
+# README "Lint your own workflows with actionlint".
 #
-# `paths:` フィルタは付けない。このチェックは main の必須ステータスチェックにしてあり、
-# skip されたチェックは「成功」ではなく「未報告」になるため、ワークフローを触らない PR が
-# 永久にマージできなくなる。全 PR で走らせるのが条件。
+# No `paths:` filter. This check is a required status check on main, and a skipped check
+# counts as "not reported" rather than "passed", so a PR that does not touch the workflows
+# could never be merged. It has to run on every PR.
 
 name: Lint workflows
 
@@ -29,8 +29,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # このリポジトリは Go のコードを持たない。go.mod が無いので go-version を明示し、
-      # キャッシュも切る（既定の true のままだと go.mod を探して毎回 warning を出す）。
+      # This repository has no Go code. With no go.mod, set go-version explicitly and turn
+      # the cache off (left at the default true, it looks for go.mod and warns every run).
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: stable

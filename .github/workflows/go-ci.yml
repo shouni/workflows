@@ -4,31 +4,31 @@ on:
   workflow_call:
     inputs:
       timeout-minutes:
-        description: 各ジョブの制限時間（分）
+        description: Time limit for each job (minutes)
         type: number
         default: 15
       golangci-lint-version:
-        description: CI で使う golangci-lint の版
+        description: golangci-lint version used in CI
         type: string
         default: v2.14.0
       coverage:
-        description: カバレッジを測り、ステップサマリに出す
+        description: Measure coverage and write it to the step summary
         type: boolean
         default: false
       upload-coverage:
-        description: coverage.out を artifact に上げる。coverage が true のときだけ意味を持つ
+        description: Upload coverage.out as an artifact. Only meaningful when coverage is true
         type: boolean
         default: false
       apt-packages:
-        description: テスト前に入れる apt パッケージ（空白区切り）
+        description: apt packages to install before the tests (space-separated)
         type: string
         default: ''
       fuzz-targets:
-        description: '"パッケージ#関数名" の空白区切り。空なら fuzz ジョブごと走らない'
+        description: 'Space-separated "package#FunctionName". When empty, the fuzz job does not run at all'
         type: string
         default: ''
       fuzz-time:
-        description: 1 ターゲットあたりの fuzz 時間
+        description: Fuzz time per target
         type: string
         default: 20s
 
@@ -50,13 +50,13 @@ jobs:
 
       - name: Install apt packages
         if: inputs.apt-packages != ''
-        # 3 回ぶんを収める。1 回は timeout 60 + timeout 120 + sleep 10 = 190 秒で、3 回で 570 秒。
-        # コマンド側の timeout を変えたら、ここも合わせて見直すこと。
+        # Fits three attempts. One attempt is timeout 60 + timeout 120 + sleep 10 = 190 seconds; three are 570 seconds.
+        # If the commands' timeouts change, revisit this value too.
         timeout-minutes: 10
         env:
           PACKAGES: ${{ inputs.apt-packages }}
         run: |
-          # 空白区切りを明示的に配列へ開く。裸の $PACKAGES に頼る語分割は shellcheck の SC2086 になる。
+          # Split the space-separated list into an array explicitly. Relying on word splitting of a bare $PACKAGES trips shellcheck SC2086.
           read -ra PKGS <<< "$PACKAGES"
           for attempt in 1 2 3; do
             if timeout 60 sudo apt-get update \
@@ -158,7 +158,7 @@ jobs:
           TARGETS: ${{ inputs.fuzz-targets }}
           FUZZTIME: ${{ inputs.fuzz-time }}
         run: |
-          # 既定のシェルは pipefail ではないので、go test の失敗が tee の成功に隠れないようにする。
+          # The default shell is not pipefail, so keep a go test failure from being hidden by tee's success.
           set -o pipefail
           log="$(mktemp)"
           for spec in $TARGETS; do
@@ -166,10 +166,10 @@ jobs:
             fn="${spec##*#}"
             echo "::group::${pkg} ${fn}"
             go test "$pkg" -run '^$' -fuzz "^${fn}$" -fuzztime "$FUZZTIME" 2>&1 | tee "$log"
-            # -fuzz が 0 個に一致しても go test は警告を出して exit 0 で返る。終了コードだけでは
-            # 改名・綴り違い・パッケージ移動が「緑の空回り」になる（README「設計の判断」）。
+            # When -fuzz matches nothing, go test prints a warning and returns exit 0. Judged by the exit
+            # code alone, a rename, typo or package move becomes a green no-op (README "Design decisions").
             if grep -q 'no fuzz tests to fuzz' "$log"; then
-              echo "::error::${pkg} に ${fn} が無い（改名か綴り違い）。fuzz-targets を直すこと。" >&2
+              echo "::error::${fn} not found in ${pkg} (renamed or misspelled). Fix fuzz-targets." >&2
               exit 1
             fi
             echo "::endgroup::"

@@ -1,5 +1,5 @@
-# 各設定の理由（gomod を宣言しない理由を含む）は README の「Dependabot の規約」にある。
-# ここでの更新は `v1` を動かすまで消費側に届かない（README「変更を反映する手順」）。
+# The reason for each setting (including why gomod is not declared) is in README "Dependabot conventions".
+# Updates here do not reach consumers until `v1` is moved (README "Rolling out a change").
 version: 2
 
 updates:
