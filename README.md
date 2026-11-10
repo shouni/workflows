@@ -4,29 +4,32 @@
 [![GitHub tag (latest by date)](https://img.shields.io/github/v/tag/shouni/workflows)](https://github.com/shouni/workflows/tags)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-フリート共通の CI を持つリポジトリ。Go のコードは持たない。
+English | [日本語](README.ja.md)
 
-| 中身 | 役割 |
+The repository that holds the CI shared across the fleet. It contains no Go code.
+
+| Contents | Role |
 |---|---|
-| `.github/workflows/go-ci.yml` | 再利用可能ワークフロー（`workflow_call`）。**24 リポジトリが呼んでいる** |
-| `.github/workflows/lint.yml` | 上を actionlint に掛ける。**このリポジトリ自身の CI** |
-| README（この文書） | 各リポジトリの `ci.yml` と `dependabot.yml` が理由を書かずに参照する先 |
+| `.github/workflows/go-ci.yml` | Reusable workflow (`workflow_call`). **Called by 24 repositories** |
+| `.github/workflows/lint.yml` | Runs actionlint over the above. **This repository's own CI** |
+| README (this document) | Where each repository's `ci.yml` and `dependabot.yml` point instead of writing down their reasons |
 
 ---
 
-## 🚀 なぜ共有するのか (Why)
+## 🚀 Why share it
 
-**目的は重複の削減ではなく、対処の配布。** ランナーや外部アクションの都合で必要になった
-回避策（下の「設計の判断」）を 1 箇所に書けば、24 本すべてに届く。個別に持たせると、
-持っているリポジトリと持っていないリポジトリが静かに分かれる。
+**The goal is distributing fixes, not reducing duplication.** A workaround made necessary by
+the runner or an external action (see "Design decisions" below) is written in one place and
+reaches all 24 repositories. Kept per repository, the ones that have it and the ones that do
+not quietly drift apart.
 
-リポジトリごとの差は入力（下の「入力とジョブ」）で吸収する。
+Per-repository differences are absorbed by inputs (see "Inputs and jobs" below).
 
 ---
 
-## 📦 使い方 (Usage)
+## 📦 Usage
 
-呼ぶ側の `.github/workflows/ci.yml` はこれだけになる。
+The caller's `.github/workflows/ci.yml` comes down to this:
 
 ```yaml
 name: CI
@@ -49,44 +52,46 @@ jobs:
     uses: shouni/workflows/.github/workflows/go-ci.yml@v1
 ```
 
-`on` / `concurrency` / `permissions` は呼ぶ側に残る。`workflow_call` を宣言できるのは
-呼ばれる側だけなので、トリガーの定義は共有できない。
+`on` / `concurrency` / `permissions` stay with the caller. Only the called side can declare
+`workflow_call`, so the trigger definitions cannot be shared.
 
 ---
 
-## ⚙️ 入力とジョブ (Inputs and jobs)
+## ⚙️ Inputs and jobs
 
-| 入力 | 型 | 既定値 | 意味 |
+| Input | Type | Default | Meaning |
 |---|---|---|---|
-| `timeout-minutes` | number | `15` | 各ジョブの制限時間 |
-| `golangci-lint-version` | string | `v2.14.0` | golangci-lint の版 |
-| `coverage` | boolean | `false` | カバレッジを測り、ステップサマリに出す |
-| `upload-coverage` | boolean | `false` | `coverage.out` を artifact に上げる（7 日保持）。`coverage: true` が前提 |
-| `apt-packages` | string | `''` | テスト前に入れる apt パッケージ（空白区切り） |
-| `fuzz-targets` | string | `''` | `パッケージ#関数名` の空白区切り。一致する関数が無いと失敗する |
-| `fuzz-time` | string | `20s` | 1 ターゲットあたりの fuzz 時間 |
+| `timeout-minutes` | number | `15` | Time limit for each job |
+| `golangci-lint-version` | string | `v2.14.0` | golangci-lint version |
+| `coverage` | boolean | `false` | Measure coverage and write it to the step summary |
+| `upload-coverage` | boolean | `false` | Upload `coverage.out` as an artifact (kept 7 days). Requires `coverage: true` |
+| `apt-packages` | string | `''` | apt packages to install before the tests (space-separated) |
+| `fuzz-targets` | string | `''` | Space-separated `package#FunctionName`. Fails when no function matches |
+| `fuzz-time` | string | `20s` | Fuzz time per target |
 
-ジョブは 4 つ。`fuzz` は `fuzz-targets` が空だと条件で落ち、**実行されずに skipped と
-表示される**（一覧から消えるわけではない）。
+There are four jobs. When `fuzz-targets` is empty, `fuzz` is excluded by its condition and
+**shows as skipped without running** (it does not disappear from the list).
 
-| ジョブ | 内容 |
+| Job | What it does |
 |---|---|
-| `Build & Test` | apt → build → vet → gofmt → test（+ カバレッジ） |
-| `Lint` | golangci-lint。**設定は各リポジトリの `.golangci.yml` を読む** |
-| `govulncheck` | 手動 install して実行 |
-| `Fuzz (smoke)` | `fuzz-targets` を順に探索 |
+| `Build & Test` | apt → build → vet → gofmt → test (+ coverage) |
+| `Lint` | golangci-lint. **The configuration is read from each repository's `.golangci.yml`** |
+| `govulncheck` | Installed by hand and run |
+| `Fuzz (smoke)` | Explores each of `fuzz-targets` in turn |
 
-**fuzz が落ちると、`fuzz-corpus` という artifact に再現用シードが上がる**
-（`**/testdata/fuzz/`、7 日保持）。CI で見つけたクラッシュ入力はここにしか残らないので、
-回帰テストにするならこれを取ってコミットする。成功時は生成されない。
+**When fuzzing fails, the reproducing seeds are uploaded as an artifact named `fuzz-corpus`**
+(`**/testdata/fuzz/`, kept 7 days). A crashing input found in CI survives nowhere else, so
+take it from there and commit it if it should become a regression test. Nothing is produced
+on success.
 
 ---
 
-## 🗂 リポジトリごとの設定 (Per-repository settings)
+## 🗂 Per-repository settings
 
-`with:` が要るのは 9 本で、残り 15 本は呼ぶだけでよい。**下表は公開リポジトリの 8 本のみ。**
+9 repositories need `with:`; the remaining 15 only call it. **The table below lists only the
+8 public ones.**
 
-| リポジトリ | 設定 |
+| Repository | Settings |
 |---|---|
 | `audio` | `fuzz-targets: "./wav#FuzzExtractAudioData ./wav#FuzzCombineToMatchesCombineWavData ./wav#FuzzCombineToDoesNotPanic"` |
 | `gcp-kit` | `fuzz-targets: "./auth/session#FuzzBuildLoginRedirectURL ./auth/session#FuzzIsSafeRelativePath ./auth/oidc#FuzzExtractBearerToken"` |
@@ -97,224 +102,240 @@ jobs:
 | `go-web-reader` | `fuzz-targets: "./extract#FuzzText ./reader#FuzzResolveMediaType"` / `fuzz-time: 60s` |
 | `netarmor` | `coverage: true` / `upload-coverage: true` / `fuzz-targets: "./securenet#FuzzValidateURL ./securenet#FuzzIsSecureServiceURL ./securenet#FuzzZonedLiteral"` / `fuzz-time: 60s` |
 
-各リポジトリの `ci.yml` には、その対象を fuzz する理由がコメントで書いてある。
+Each repository's `ci.yml` explains in a comment why it fuzzes those targets.
 
-`fuzz-time` は 6 本が `60s`、`gcp-kit` と `audio` は既定の `20s`。**この差に理由の記録は
-無い**ので、値だけ据えて説明は付けていない。揃える判断をするなら、まず理由を決めること。
-
----
-
-## 📐 設計の判断 (Design decisions)
-
-### なぜ独立した公開リポジトリなのか
-
-消費側には private なリポジトリが混じる。**公開リポジトリのワークフローは private からも
-追加設定なしで呼べる**が、逆は成立しない。private に置くと、公開リポジトリから呼ぶ側に
-個別のアクセス許可が要る。
-
-### govulncheck をアクションで動かさない
-
-`golang/govulncheck-action@v1` は `GOTOOLCHAIN=local` を強制するため、`go.mod` が要求する
-版がランナーに無いと、走査以前にパッケージの読み込みで落ちる。`setup-go` は同じ `go.mod`
-から解決でき、`check-latest` も効くので、他のジョブと同じ toolchain で走る。
-
-**アクション側が `GOTOOLCHAIN` を上書きしなくなったら戻せる。**
-
-### `check-latest: true` を全ジョブに付ける
-
-ランナーに焼かれている版をそのまま使わせない。標準ライブラリの脆弱性はパッチリリースで
-直るため、キャッシュ優先だと govulncheck が古い toolchain を走査して落ち続ける
-（`go.mod` の `go` 行はあくまで下限）。
-
-### 外部入力は `env:` 経由で渡す
-
-`apt-packages` と `fuzz-targets` は `${{ }}` を `run:` に直接埋めず、`env:` に置いてから
-シェル変数として参照する。呼ぶ側は自分の管理下だが、テンプレート展開がシェルの構文解析より
-先に起きる形を残さない。
-
-### fuzz は「探索しなかった」ことを失敗として扱う
-
-`go test -run '^$' -fuzz '^Name$'` は、`Name` が存在しなくても **exit 0 で返る**
-（`testing: warning: no fuzz tests to fuzz` を出して PASS）。終了コードだけを見ていると、
-関数の改名・綴り違い・パッケージの移動が、そのまま「緑の fuzz ジョブ」になる。
-
-**fuzz が唯一の防波堤になっている入力経路がある**ので（`netarmor` の URL 検証、`gcp-kit` の
-Bearer トークン、`go-utils` のジョブ ID 検証）、黙って止まる形は残さない。出力に
-その警告が出たらステップを落とす。
-
-実例として `gcp-kit` は `./auth` から `./auth/session` と `./auth/oidc` へ分割されており、
-`fuzz-targets` の追随が必要になったことが既にある。
-
-### apt はリトライで包む
-
-ミラー側の不調は「失敗」ではなく「応答しない」形で出る。実測で `apt-get update` が
-14 分応答せず、ジョブ全体の制限時間をこのステップだけで使い切った（同一コミットの
-`pull_request` 側は 4 分半で完走しており、原因はコードではなくミラー）。
-**コマンド単位で `timeout` を掛けないと、ハングしたときにリトライへ進めない。**
-
-**リトライの回数は、ステップの制限時間と噛み合っていないと嘘になる。** 3 回ぶんが
-ステップの 10 分に収まるようにしてある（計算は `go-ci.yml` のコメント）。以前はコマンド側が
-120/180 秒でステップが 6 分だったため、**2 回目の途中で打ち切られて 3 回は回っていなかった。**
-
-### 自分のワークフローは actionlint に掛ける
-
-`go-ci.yml` は 24 本が参照するのに、**このリポジトリだけ何の検査も無いという状態**だった。
-消費側の公開リポジトリ 22 本は必須ステータスチェックで守られていて、配っている側が守られていない
-（非公開の 2 本は無料プランでは設定できない）。
-
-actionlint は `run:` の中身も検査する。ランナーに shellcheck が入っているのを見つけて、
-シェルスクリプトとして解析するため。**手元で `actionlint` を動かすときはここが落とし穴で、
-shellcheck が無い環境では `run:` の検査が丸ごと省略される。** 緑に見えて CI で落ちる。
-導入時に実際に go-ci.yml の apt ステップが SC2086 で引っかかった。
-
-版は `@latest` ではなく固定する。govulncheck は新しいほど良いが、リンタは新しい版が出た
-瞬間に赤くなるのが困る（`golangci-lint-version` をピンしているのと同じ理由）。上げるのは
-手作業になる（`go install` の版は Dependabot の対象外）。
-
-**ピンしたリンタは Go の側から壊れることがある。** Go は `check-latest: true` で最新の
-パッチ版に上がるが、golangci-lint は固定のまま。Go 1.27.2 で標準ライブラリの export data が
-version 5 になり、v2.13.1（version 4 まで）は全リポジトリの Lint で `could not load export
-data` の typecheck エラーを出した。この形のエラーはコードではなく版の不一致なので、
-golangci-lint を上げる。
-
-### 外部アクションはコミット SHA で参照する
-
-**タグは付け替えられ、このファイルは全リポジトリが呼ぶ。** 書き換え 1 つが全部に同時に届く。
-形は完全な SHA ＋ `# vX.Y.Z`（Dependabot が両方を上げる）。
-
-`actions.lock` は不要：使う 4 つは他のアクションを呼ばないので、SHA だけで同じところまで固定できる。
-
-### `.golangci.yml` は共有しない
-
-**版のピンだけを共有し、設定そのものは各リポジトリに残す。** 24 本中 15 本が一致するが、
-残る 9 本（7 通り）の差は意図的なものを含む。たとえば `go-notify` は `exhaustive` を追加して
-`check: [switch, map]` にしてあり、理由が設定に書いてある——`notify.Level` を実際に
-扱い分けているのは `slack` の `levelColors` でこれはマップなので、種別を足したときに
-抜けても参照が空文字で素通りし、拾えないと無色の通知になる。
-
-**共通化するとこの知識の置き場所が消える。** 一致している 15 本も、一致していることが
-検査されていないだけで、揃える理由が別にあるわけではない。
-
-新しい golangci-lint を 1 本だけで試したい場合は `golangci-lint-version` を上書きする。
+Six repositories use `fuzz-time: 60s`; `gcp-kit` and `audio` use the default `20s`. **No reason
+for this difference was recorded**, so the values are kept as they are with no explanation
+attached. If you decide to align them, settle the reason first.
 
 ---
 
-## 🏷 タグと反映 (Tags and rollout)
+## 📐 Design decisions
 
-### 移動するタグ `@v1` で参照する
+### Why a separate public repository
 
-呼ぶ側は `@v1` を指す。このタグはリリースのたびに張り替える。
+Some consumers are private. **A workflow in a public repository can be called from a private
+one with no extra setup**, but not the other way round. Kept in a private repository, every
+public caller would need its own access grant.
 
-**不変のタグ（`@v1.0.0`）で固定して Dependabot に上げさせる形は採れない。** 消費側を
-`@v1.0.0` に固定して新しい版を切り、日次ジョブと手動スキャンで複数回走らせて確かめた
-結果がこれ。
+### govulncheck does not run through the action
+
+`golang/govulncheck-action@v1` forces `GOTOOLCHAIN=local`, so when the runner lacks the
+version `go.mod` requires, it fails while loading packages, before scanning anything.
+`setup-go` resolves from the same `go.mod` and honours `check-latest`, so govulncheck runs on
+the same toolchain as the other jobs.
+
+**This can be reverted once the action stops overriding `GOTOOLCHAIN`.**
+
+### `check-latest: true` on every job
+
+Do not let a job use whatever version is baked into the runner. Standard library
+vulnerabilities are fixed in patch releases, so preferring the cache leaves govulncheck
+scanning an old toolchain and failing over and over (the `go` line in `go.mod` is only a
+lower bound).
+
+### External input goes through `env:`
+
+`apt-packages` and `fuzz-targets` are not embedded in `run:` as `${{ }}`; they are put in
+`env:` and referenced as shell variables. The callers are under our own control, but no form
+where template expansion happens before shell parsing is left in place.
+
+### Fuzzing treats "explored nothing" as a failure
+
+`go test -run '^$' -fuzz '^Name$'` **returns exit 0** even when `Name` does not exist (it
+prints `testing: warning: no fuzz tests to fuzz` and PASSes). Looking only at the exit code,
+a renamed function, a typo or a moved package turns straight into a "green fuzz job".
+
+**For some input paths fuzzing is the only line of defence** (URL validation in `netarmor`,
+Bearer tokens in `gcp-kit`, job ID validation in `go-utils`), so no form that stops silently
+is left in place. The step fails when that warning appears in the output.
+
+As a real example, `gcp-kit` was split from `./auth` into `./auth/session` and `./auth/oidc`,
+and `fuzz-targets` has already had to follow.
+
+### apt is wrapped in retries
+
+Mirror trouble shows up not as "failing" but as "not responding". In one observed run
+`apt-get update` did not respond for 14 minutes and this step alone used up the whole job's
+time limit (the `pull_request` run of the same commit finished in four and a half minutes;
+the cause was the mirror, not the code). **Without a `timeout` on each command, a hang never
+reaches the retry.**
+
+**A retry count that does not fit the step's time limit is a lie.** Three attempts are sized
+to fit the step's 10 minutes (the arithmetic is in the comment in `go-ci.yml`). Previously the
+commands had 120/180 seconds and the step 6 minutes, so **it was cut off partway through the
+second attempt and never reached three.**
+
+### Lint your own workflows with actionlint
+
+`go-ci.yml` is referenced by 24 repositories, yet **this repository alone had no checks at
+all**. The 22 public consumers are protected by required status checks while the one handing
+out the workflow was not (the 2 private ones cannot set them on the free plan).
+
+actionlint checks the contents of `run:` too: it finds shellcheck on the runner and analyses
+the commands as a shell script. **This is the pitfall when running `actionlint` locally: where
+shellcheck is missing, the `run:` checks are skipped entirely.** It looks green and then fails
+in CI. When this was introduced, the apt step in go-ci.yml actually tripped SC2086.
+
+The version is pinned rather than `@latest`. govulncheck is better the newer it is, but a
+linter turning red the moment a new version ships is a problem (the same reason
+`golangci-lint-version` is pinned). Bumping it is manual (`go install` versions are outside
+Dependabot's scope).
+
+**A pinned linter can be broken from the Go side.** Go moves to the latest patch release with
+`check-latest: true`, but golangci-lint stays pinned. In October 2026, Go 1.27.2 moved the
+standard library's export data to version 5, and v2.13.1 (which supports up to version 4)
+produced a `could not load export data` typecheck error in Lint for every repository; the
+default went to v2.14.0. An error of this shape is a version mismatch, not the code, so bump
+golangci-lint.
+
+### External actions are referenced by commit SHA
+
+**Tags can be moved, and this file is called by every repository.** One rewrite reaches all
+of them at once. The form is the full SHA plus `# vX.Y.Z` (Dependabot bumps both).
+
+`actions.lock` is not needed: none of the four actions used calls other actions, so the SHA
+alone pins them just as far.
+
+### `.golangci.yml` is not shared
+
+**Only the version pin is shared; the configuration itself stays in each repository.** 15 of
+the 24 match, but the differences in the other 9 (7 variants) include deliberate ones. For
+example, `go-notify` adds `exhaustive` with `check: [switch, map]`, and the reason is written
+in the configuration: the code that actually distinguishes `notify.Level` values is
+`levelColors` in `slack`, which is a map, so a level added and missed there would pass through
+as an empty-string lookup, and without the check the notification would go out uncoloured.
+
+**Sharing it would remove the place where this knowledge lives.** The 15 that match are
+simply not checked for matching; there is no separate reason they must be the same.
+
+To try a new golangci-lint in a single repository, override `golangci-lint-version`.
+
+---
+
+## 🏷 Tags and rollout
+
+### Reference the moving tag `@v1`
+
+Callers point at `@v1`. The tag is moved on every release.
+
+**Pinning an immutable tag (`@v1.0.0`) and letting Dependabot bump it does not work.** This is
+the result of pinning a consumer to `@v1.0.0`, cutting a new version and checking across
+several runs of the daily job and manual scans.
 
 | | |
 |---|---|
-| 依存グラフが参照を検出するか | **する**（`go-ci.yml` を版付きで記録） |
-| Dependabot が版を上げる PR を出すか | **出さない**（毎回 "No PRs affected"、ブランチも作られない） |
+| Does the dependency graph detect the reference? | **Yes** (records `go-ci.yml` with its version) |
+| Does Dependabot open a PR bumping the version? | **No** ("No PRs affected" every time, and no branch is created) |
 
-**依存グラフの検出と、version update の対応範囲は別の系統。** ジョブレベルの `uses:`
-（`jobs.<id>.uses`）は、ステップレベルの `uses:`（`steps[].uses`）と違って更新対象に
-なっていない。依存グラフに載っていることを「Dependabot が追う」根拠にしないこと。
+**Dependency graph detection and version update support are separate systems.** A job-level
+`uses:` (`jobs.<id>.uses`), unlike a step-level `uses:` (`steps[].uses`), is not covered by
+updates. Do not take its presence in the dependency graph as evidence that Dependabot tracks
+it.
 
-`sed` で全消費側の ref を一括置換する案も検討したが、更新のたびに全リポジトリを同時に
-書き換えることになり、**段階的展開を守っているようで守れていない**ので採らなかった。
+Rewriting every consumer's ref in bulk with `sed` was also considered, but it rewrites every
+repository at the same time on each update, **which looks like a staged rollout without being
+one**, so it was not adopted.
 
-### 変更を反映する手順
+### Rolling out a change
 
-移動タグは張り替えた瞬間に全消費側へ届く。**壊れた内容を張り替えれば全部が同時に落ちる。**
+A moving tag reaches every consumer the moment it is moved. **Move it onto something broken
+and everything fails at once.**
 
-ガードは 2 段ある。**機械で拾える分は `lint.yml` の actionlint が PR の時点で拾う**（式の
-参照先、`uses:` の書式、`run:` の中身）。だが actionlint は「文法として正しいが、やることが
-間違っている」を拾えない。**振る舞いのガードは手順にしか無いので、3 を飛ばさないこと。**
+There are two guards. **What a machine can catch, `lint.yml`'s actionlint catches at PR time**
+(expression references, `uses:` syntax, the contents of `run:`). But actionlint cannot catch
+"syntactically correct, but doing the wrong thing". **The only guard on behaviour is the
+procedure, so do not skip step 3.**
 
-1. develop で `go-ci.yml` を変更し、main へ
-2. **不変タグ `v1.x.y` を切る**（履歴として、また壊れたときの退避先として残す）
-3. **消費側 1 本だけ**を一時的に `@v1.x.y` へ向け、CI が緑になるのを確認する
-4. 緑なら `v1` をそのコミットへ移す
-5. 残りは次回の CI 実行から新しい内容になる
-6. カナリアにした 1 本を `@v1` へ戻す
+1. Change `go-ci.yml` on develop, then merge to main
+2. **Cut an immutable tag `v1.x.y`** (kept as history and as a fallback if something breaks)
+3. Temporarily point **a single consumer** at `@v1.x.y` and confirm its CI goes green
+4. If green, move `v1` to that commit
+5. The rest pick up the new content from their next CI run
+6. Point the canary back at `@v1`
 
-**`v1` を動かすのは `go-ci.yml` が変わったときだけ。** 消費側から見えるのは `go-ci.yml`
-だけなので、README や `dependabot.yml` の修正で張り替えると、タグの履歴が
-「いつ中身が変わったか」を示さなくなる。
+**Move `v1` only when `go-ci.yml` changes.** Consumers see only `go-ci.yml`, so moving the tag
+for a README or `dependabot.yml` fix would stop the tag history from showing "when the
+contents changed".
 
-裏返すと、**このリポジトリへのマージだけでは消費側に何も届かない。** マージした時点で
-反映される普通のリポジトリとは効き方が違う。遅延ではなく仕様。
+Put the other way round, **merging into this repository delivers nothing to the consumers.**
+This works differently from an ordinary repository, where a merge takes effect immediately.
+It is by design, not a delay.
 
 ---
 
-## 🤖 Dependabot の規約 (Dependabot conventions)
+## 🤖 Dependabot conventions
 
-フリートの各リポジトリは同じ形の `.github/dependabot.yml` を置いている。**各ファイルは
-設定だけを持ち、理由はここにある。**
+Every repository in the fleet has a `.github/dependabot.yml` of the same shape. **Each file
+holds only the settings; the reasons are here.**
 
-### 全依存を 1 グループにまとめる
+### All dependencies in one group
 
-`patterns: ["*"]` で 1 本の PR に収める。個別に PR を立てると、直接依存の多いリポジトリで
-大量に積み上がる。それ以上に問題なのは、**相互に整合が必要な依存が別々の PR に割れる**こと
-（`gcp-kit` の `cloud.google.com/go*` / `google.golang.org/*` / `golang.org/x/oauth2` が
-その例で、以前は専用グループを切っていた）。グループ化していると、既存の PR は作り直されず
-更新される。
+`patterns: ["*"]` fits everything into one PR. Separate PRs pile up in repositories with many
+direct dependencies. More importantly, **dependencies that must stay consistent with each
+other get split into separate PRs** (`gcp-kit`'s `cloud.google.com/go*` /
+`google.golang.org/*` / `golang.org/x/oauth2` are the example; they used to have a dedicated
+group). With grouping, an existing PR is updated rather than recreated.
 
-### 日次で確認する
+### Checked daily
 
-内部ライブラリ（`github.com/shouni/*`）にタグを打った翌日には、依存側へ PR が届くように
-するため。バージョンが枝分かれしたまま放置されるのを防ぐ。
+So that a tag pushed on an internal library (`github.com/shouni/*`) reaches its dependents as
+a PR the next day. This keeps versions from being left diverged.
 
-### 定常更新は develop 宛。ただし脆弱性 PR は main へ行く
+### Routine updates target develop, but security PRs go to main
 
-`target-branch: develop` にして、依存更新も他の変更と同じ経路（develop → main）を通す。
-main を検証済みの状態に保つため。
+`target-branch: develop` sends dependency updates down the same path as every other change
+(develop → main), to keep main in a verified state.
 
-**この指定が効くのは定常更新だけ。** 脆弱性の修正 PR は `target-branch` に関わらず、常に
-デフォルトブランチ（main）宛に作られる。緊急対応を develop の進行状況から切り離すための
-GitHub 側の仕様で、設定では変えられない。**main と develop が枝分かれしていると、
-脆弱性 PR をマージした分が develop に降りてこない**ので、定期的に揃えること。
+**This setting applies only to routine updates.** Security fix PRs always target the default
+branch (main) regardless of `target-branch`. This is GitHub's design, which separates urgent
+fixes from the progress on develop, and cannot be changed by configuration. **If main and
+develop diverge, merged security PRs never come down to develop**, so bring them back in line
+regularly.
 
-### 内部ライブラリの更新は手作業が先行する
+### Internal library updates are done by hand first
 
-実態として `github.com/shouni/*` のバージョンは手で一斉に上げていることが多く
-（`deps: bump shouni libraries` の類）、Dependabot の PR は「もう上がっている」ことの
-確認になりがち。**それでも設定を外さないのは、一斉更新の取りこぼしを拾うため。**
-手作業は数十本を相手にすると必ず漏れる。
+In practice the `github.com/shouni/*` versions are usually bumped by hand all at once
+(`deps: bump shouni libraries` and the like), so Dependabot's PR tends to confirm that "it is
+already bumped". **The setting stays anyway, to catch what the bulk update missed.** Done by
+hand across dozens of repositories, something always slips.
 
-### エコシステムはリポジトリの中身で決まる
+### Ecosystems follow the repository's contents
 
-| リポジトリの種類 | 宣言するもの |
+| Kind of repository | What it declares |
 |---|---|
-| Go のライブラリ | `gomod` + `github-actions` |
-| Go のアプリ（`Dockerfile` を持つ） | `gomod` + **`docker`** + `github-actions` |
+| Go library | `gomod` + `github-actions` |
+| Go app (has a `Dockerfile`) | `gomod` + **`docker`** + `github-actions` |
 | Terraform | `terraform` + `github-actions` |
-| **このリポジトリ**（Go のコード無し） | `github-actions` のみ |
+| **This repository** (no Go code) | `github-actions` only |
 
-Go のコードが無いのに `gomod` を宣言すると、依存ゼロの走査が毎日回るだけになる。
-**このリポジトリの `dependabot.yml` は標準形ではなくこの例外**なので、見本にするなら
-Go のリポジトリのものを見ること。
+Declaring `gomod` with no Go code only runs a zero-dependency scan every day. **This
+repository's `dependabot.yml` is this exception, not the standard form**, so look at a Go
+repository's file if you want a model.
 
-`docker` が要るのは `Dockerfile` を持つリポジトリだけで、判定は「ビルドが CI にあるか」
-ではない。**イメージのビルドは Cloud Build 側なので GitHub Actions には一切現れないが、
-それは追跡しなくていい理由にはならない。** `mwader/static-ffmpeg:7.1` のように版を固定した
-ベースイメージは、誰も上げなければ永久にその版のままになる。`golang:1.27-alpine` のような
-浮動タグは再ビルドでパッチを拾えるが、`1.27` から先へは自分では動かない。
+Only repositories with a `Dockerfile` need `docker`, and the test is not "is the build in CI".
+**Images are built on Cloud Build and never show up in GitHub Actions, but that is no reason
+not to track them.** A base image pinned to a version, such as `mwader/static-ffmpeg:7.1`,
+stays on that version forever if nobody bumps it. A floating tag such as `golang:1.27-alpine`
+picks up patches on rebuild, but never moves past `1.27` on its own.
 
-`FROM scratch` は Dependabot の対象外なので、書いても書かなくても結果は変わらない。
-
----
-
-## ⚠️ 限界 (Limitations)
-
-**再利用可能ワークフローは任意のステップを差し込めない。** 入力で表現できない要件が出た
-リポジトリは、自前の `ci.yml` に戻ることになる。入力を増やして対応するか、そのリポジトリ
-だけ外れるかは、その都度の判断になる。
-
-判断の目安は「**その要件が他のリポジトリにも起こりうるか**」。`apt-packages` は起こりうる
-ので入力にしたが、1 本にしか起きない要件のために入力を増やすと、共有ワークフローが分岐の
-集合になって共有する意味が薄れる。
+`FROM scratch` is outside Dependabot's scope, so writing it or not changes nothing.
 
 ---
 
-## 📄 ライセンス (License)
+## ⚠️ Limitations
 
-MIT License. 詳細は [LICENSE](LICENSE) を参照。
+**A reusable workflow cannot have arbitrary steps inserted.** A repository with a requirement
+the inputs cannot express goes back to its own `ci.yml`. Whether to add an input or let that
+repository drop out is decided case by case.
+
+The rule of thumb is "**could this requirement happen to other repositories too?**"
+`apt-packages` could, so it became an input; adding inputs for requirements that only one
+repository has turns the shared workflow into a collection of branches and erodes the point of
+sharing it.
+
+---
+
+## 📄 License
+
+MIT License. See [LICENSE](LICENSE) for details.
